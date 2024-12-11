@@ -1,0 +1,19 @@
+{
+  "name": "obsidian-anki-sync",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Noel C",
+  "license": "ISC",
+  "dependencies": {
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@rollup/plugin-typescript": "^12.1.1",
+    "obsidian": "^1.7.2",
+    "typescript": "^5.7.2"
+  }
+}
