@@ -1,2 +1,11 @@
-node_modules
+# Node modules
+node_modules/
+
+# Built files
+main.js
+*.js.map
+data.json
+
+# Environment
+.env
 .DS_Store
