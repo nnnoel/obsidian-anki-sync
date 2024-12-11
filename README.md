@@ -32,96 +32,44 @@ A plugin for [Obsidian](https://obsidian.md) that syncs your notes to [Anki](htt
 
 ## Usage
 
-### Basic Setup
+### Prerequisites
 
-1. Create a note in Obsidian
-2. Add the following frontmatter to configure the sync:
+1. **Anki Note Type**: Create your desired note type in Anki *before* using this plugin
+   - The plugin does not create note types automatically
+   - If the specified note type doesn't exist, sync will fail with an error
 
-```yaml
+### Field Mappings
+
+Field mappings connect your note content to Anki fields. The left side (keys) are what you'll use in your notes, and the right side (values) must match your Anki note type fields exactly:
+
+```json
+{
+  "Word": "Front",        // Your note's "Word" section → Anki's "Front" field
+  "Meaning": "Back",      // Your note's "Meaning" section → Anki's "Back" field
+  "Context": "Context"    // Your note's "Context" section → Anki's "Context" field
+}
+```
+
+**Requirements:**
+- Values must exactly match existing Anki note type fields (case-sensitive)
+- At minimum, map the required fields for your note type (usually Front/Back)
+- Unmapped fields in your notes will be ignored
+
+### Example Note
+
+```markdown
 ---
-ankiDeck: "Your Deck Name"
-ankiNoteType: "Your Note Type"
+ankiDeck: "Vocabulary"
+ankiNoteType: "Vocabulary"
 ankiFieldMappings:
-  Front: "Front"
-  Back: "Back"
-  Usage: "Usage"
-  Example: "Example"
+  Word: "Front"
+  Meaning: "Back"
   Context: "Context"
 ---
-```
 
-### Creating Cards
-
-The plugin maps your note's content to Anki fields using `ankiFieldMappings`. Understanding this mapping is crucial:
-
-- **Keys** (left side): The field names you'll use in your Obsidian note
-- **Values** (right side): The corresponding field names in your Anki note type
-
-For example, if you have an Anki note type called "Vietnamese" with fields `Front`, `Back`, `Usage`, `Example`, and `Context`, here's how to set it up:
-
-1. First, set up the mapping in your note's frontmatter:
-```yaml
----
-ankiDeck: "Vietnamese"
-ankiNoteType: "Vietnamese"
-ankiFieldMappings:
-  Front: "Front"      # Left: Use "Front" in note → Right: Maps to Anki's "Front" field
-  Back: "Back"        # Left: Use "Back" in note → Right: Maps to Anki's "Back" field
-  Usage: "Usage"      # Left: Use "Usage" in note → Right: Maps to Anki's "Usage" field
-  Example: "Example"  # Left: Use "Example" in note → Right: Maps to Anki's "Example" field
-  Context: "Context"  # Left: Use "Context" in note → Right: Maps to Anki's "Context" field
----
-```
-
-2. Then use the **left-side** keys in your note content:
-```markdown
-### **Front: Your Term**        # Matches "Front" from mapping
-**Back:** Definition           # Matches "Back" from mapping
-- Usage: How it's used        # Matches "Usage" from mapping
-- Example: Example sentence   # Matches "Example" from mapping
-- Context: Additional info    # Matches "Context" from mapping
-```
-
-You can customize the mapping to use different names in your notes. For example, if you prefer different field names in your notes:
-
-```yaml
-ankiFieldMappings:
-  Word: "Front"         # Use "Word" in note instead of "Front"
-  Meaning: "Back"       # Use "Meaning" in note instead of "Back"
-  Notes: "Context"      # Use "Notes" in note instead of "Context"
-```
-
-Then your note would look like:
-```markdown
-### **Word: Your Term**         # Maps to Anki's "Front" field
-**Meaning:** Definition        # Maps to Anki's "Back" field
-- Notes: Additional info      # Maps to Anki's "Context" field
-```
-
-> **Important**: 
-> - The **values** (right side) must exactly match your Anki note type field names
-> - The **keys** (left side) can be whatever you prefer to use in your notes
-> - The plugin looks for these keys in your note content when creating cards
-> - Field names are case-sensitive on both sides
-> - At minimum, you need mappings for `Front` and `Back` Anki fields
-> - Any fields in your note that don't have a mapping will be ignored
-
-You can create different mappings for different note types. For instance, if you have a simpler "Basic" note type in Anki with just `Front` and `Back` fields:
-
-```yaml
----
-ankiDeck: "Basic"
-ankiNoteType: "Basic"
-ankiFieldMappings:
-  Question: "Front"    # Use "Question" in note → Maps to Anki's "Front" field
-  Answer: "Back"       # Use "Answer" in note → Maps to Anki's "Back" field
----
-```
-
-Then your note would use these keys:
-```markdown
-### **Question: What is the capital of France?**
-**Answer:** Paris
+### Word: Hello
+### Meaning: A greeting
+### Context: "Hello, world!"
 ```
 
 ### Syncing
