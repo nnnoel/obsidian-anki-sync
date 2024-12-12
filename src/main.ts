@@ -7,24 +7,7 @@ import {
   MarkdownView,
   parseYaml,
 } from "obsidian";
-
-interface AnkiSyncSettings {
-  defaultDeck: string;
-  defaultNoteType: string;
-  ankiConnectUrl: string;
-}
-
-interface NoteTypeFields {
-  [noteType: string]: string[];
-}
-
-interface NoteFrontmatter {
-  ankiDeck?: string;
-  ankiNoteType?: string;
-  ankiFieldMappings?: {
-    [key: string]: string;
-  };
-}
+import { AnkiSyncSettings, DEFAULT_SETTINGS, NoteFrontmatter, NoteTypeFields } from "settings";
 
 interface AnkiCard {
   [field: string]: string;
@@ -44,12 +27,6 @@ interface AnkiAction {
   action: string;
   params: any;
 }
-
-const DEFAULT_SETTINGS: AnkiSyncSettings = {
-  defaultDeck: "Default",
-  defaultNoteType: "Basic",
-  ankiConnectUrl: "http://localhost:8765",
-};
 
 export default class AnkiSyncPlugin extends Plugin {
   settings: AnkiSyncSettings;
@@ -452,81 +429,136 @@ export default class AnkiSyncPlugin extends Plugin {
     console.log("Available fields:", availableFields);
 
     const flashcards: Array<AnkiCard> = [];
-    const entries = content.split(/(?=### \*\*Front:)/).filter(Boolean);
+    
+    // Validate field mappings
+    const invalidFields = Object.values(fieldMappings).filter(ankiField => !availableFields.includes(ankiField));
+    if (invalidFields.length > 0) {
+      console.error(`Invalid field mappings: ${invalidFields.join(', ')} not found in note type`);
+      return [];
+    }
+
+    // Get all field names that we're looking for
+    const noteFields = Object.keys(fieldMappings);
+    if (noteFields.length === 0) {
+      console.error("No field mappings provided");
+      return [];
+    }
+
+    // Remove frontmatter from content before processing
+    const contentWithoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n/, '');
+
+    // Create a pattern that matches any field start
+    const firstField = noteFields[0];
+    const entrySplitPattern = new RegExp(`(?=### .*?${firstField}:)`, 'i');
+    const entries = contentWithoutFrontmatter.split(entrySplitPattern).filter(Boolean);
     console.log(`Found ${entries.length} entries to process`);
 
     for (const entry of entries) {
       console.log("\nProcessing entry:", entry.substring(0, 100) + "...");
       const fields: AnkiCard = {};
       
-      // Extract Front field from header
-      const frontMatch = entry.match(/### \*\*Front: (.*?)\*\*/);
-      if (frontMatch) {
-        fields["Front"] = frontMatch[1].trim();
-        console.log("Found Front:", fields["Front"]);
-      } else {
-        console.log("No Front field found in entry");
-      }
+      // For each field we want to capture
+      for (const [noteField, ankiField] of Object.entries(fieldMappings)) {
+        // Create a pattern that captures everything after "Field:" until the next field or end
+        const nextFields = noteFields
+          .filter(f => f !== noteField)
+          .map(f => `### |${f}:`)
+          .join('|');
 
-      // Extract Back field - everything between "Back:" and the next field or end
-      const backMatch = entry.match(/\*\*Back:\*\* ([\s\S]*?)(?=(?:-   [A-Z]|Context:|$))/);
-      if (backMatch) {
-        fields["Back"] = backMatch[1].trim();
-        console.log("Found Back:", fields["Back"].substring(0, 50) + "...");
-      } else {
-        console.log("No Back field found in entry");
-      }
+        // Match field content by looking for the field name followed by a colon,
+        // then capture everything until the next field marker or end
+        const fieldPattern = new RegExp(
+          `${noteField}:\\s*([^#]*?)(?=(?:### |${nextFields}|$))`,
+          'i'
+        );
 
-      // Extract other fields from bullet points
-      const usageMatch = entry.match(/-   Usage: ([\s\S]*?)(?=(?:-   |$))/);
-      if (usageMatch) {
-        fields["Usage"] = usageMatch[1].trim();
-        console.log("Found Usage:", fields["Usage"].substring(0, 50) + "...");
-      }
+        const match = entry.match(fieldPattern);
+        if (match) {
+          const content = match[1] || '';  // Use empty string if no capture group
+          
+          // Split content into lines and process each line
+          const lines = content.split('\n').map(line => {
+            line = line.trim();
+            // Check if it's a numbered list item or bullet point
+            if (/^\d+\./.test(line)) {
+              // Convert numbered list items to HTML ordered list
+              return line
+                .replace(/^\d+\.\s*/, '') // Remove the number
+                .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>') // Bold text
+                .replace(/\*+/g, '') // Remove any remaining asterisks
+                .replace(/_(.*?)_/g, '<i>$1</i>') // Italic
+                .trim();
+            } else if (line.startsWith('-')) {
+              // Convert bullet points to HTML unordered list
+              return line
+                .replace(/^-\s*/, '') // Remove the bullet
+                .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>') // Bold text
+                .replace(/\*+/g, '') // Remove any remaining asterisks
+                .replace(/_(.*?)_/g, '<i>$1</i>') // Italic
+                .trim();
+            } else {
+              // Convert inline markdown to HTML
+              return line
+                .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>') // Bold text
+                .replace(/\*+/g, '') // Remove any remaining asterisks
+                .replace(/_(.*?)_/g, '<i>$1</i>') // Italic
+                .replace(/\s+/g, ' ')
+                .trim();
+            }
+          });
 
-      const exampleMatch = entry.match(/-   Example: ([\s\S]*?)(?=(?:-   |$))/);
-      if (exampleMatch) {
-        fields["Example"] = exampleMatch[1].trim();
-        console.log("Found Example:", fields["Example"].substring(0, 50) + "...");
-      }
+          // Join lines and wrap lists in proper HTML tags
+          let htmlContent = '';
+          let inOrderedList = false;
+          let inUnorderedList = false;
 
-      // Extract Context field - try multiple formats
-      let contextContent = null;
-      
-      // Try bullet point format first
-      const contextBulletMatch = entry.match(/-   Context: ([\s\S]*?)(?=(?:-   |$))/);
-      if (contextBulletMatch) {
-        contextContent = contextBulletMatch[1];
-      } else {
-        // Try plain "Context:" format
-        const contextPlainMatch = entry.match(/Context:\s*([\s\S]*?)(?=(?:\n### |$))/);
-        if (contextPlainMatch) {
-          contextContent = contextPlainMatch[1];
+          lines.filter(line => line.length > 0).forEach((line, index) => {
+            if (/^\d+\./.test(content.split('\n')[index].trim())) {
+              if (!inOrderedList) {
+                htmlContent += '<ol>\n';
+                inOrderedList = true;
+              }
+              htmlContent += `  <li>${line}</li>\n`;
+            } else if (content.split('\n')[index].trim().startsWith('-')) {
+              if (!inUnorderedList) {
+                htmlContent += '<ul>\n';
+                inUnorderedList = true;
+              }
+              htmlContent += `  <li>${line}</li>\n`;
+            } else {
+              if (inOrderedList) {
+                htmlContent += '</ol>\n';
+                inOrderedList = false;
+              }
+              if (inUnorderedList) {
+                htmlContent += '</ul>\n';
+                inUnorderedList = false;
+              }
+              htmlContent += line + '\n';
+            }
+          });
+
+          // Close any open lists
+          if (inOrderedList) htmlContent += '</ol>\n';
+          if (inUnorderedList) htmlContent += '</ul>\n';
+
+          fields[ankiField] = htmlContent.trim();
+          console.log(`Found ${ankiField}:`, fields[ankiField].substring(0, 50) + "...");
+        } else {
+          console.log(`No ${ankiField} field found in entry`);
         }
       }
 
-      if (contextContent) {
-        fields["Context"] = contextContent.trim();
-        console.log("Found Context:", fields["Context"].substring(0, 50) + "...");
-      }
+      // Check for required fields
+      const hasRequiredFields = ['Front', 'Back'].every(field => 
+        fields[field] && fields[field].length > 0
+      );
 
-      // Only add the card if we have both Front and Back fields
-      if (fields["Front"] && fields["Back"]) {
-        // Clean up fields
-        Object.keys(fields).forEach(key => {
-          if (fields[key]) {
-            // Remove extra newlines and spaces
-            fields[key] = fields[key]
-              .replace(/\n+/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim();
-          }
-        });
-        
+      if (hasRequiredFields) {
         console.log("Adding card with fields:", fields);
         flashcards.push(fields);
       } else {
-        console.log("Skipping entry - missing required Front/Back fields");
+        console.log("Skipping entry - missing required fields");
       }
     }
 
