@@ -5,6 +5,7 @@ export interface AnkiSyncSettings {
   defaultDeck: string;
   defaultNoteType: string;
   ankiConnectUrl: string;
+  debug: boolean;
 }
 
 export interface NoteTypeFields {
@@ -23,6 +24,7 @@ export const DEFAULT_SETTINGS: AnkiSyncSettings = {
   defaultDeck: "Default",
   defaultNoteType: "Basic",
   ankiConnectUrl: "http://localhost:8765",
+  debug: false,
 };
 
 export class AnkiSyncSettingTab extends PluginSettingTab {
@@ -74,6 +76,18 @@ export class AnkiSyncSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.ankiConnectUrl)
           .onChange(async (value) => {
             this.plugin.settings.ankiConnectUrl = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Enable Debug Logging")
+      .setDesc("When enabled, debug messages will be logged to the console")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.debug)
+          .onChange(async (value) => {
+            this.plugin.settings.debug = value;
             await this.plugin.saveSettings();
           })
       );

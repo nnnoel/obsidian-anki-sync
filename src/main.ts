@@ -1,13 +1,11 @@
 import {
-  App,
   Plugin,
-  PluginSettingTab,
-  Setting,
   Notice,
   MarkdownView,
 } from "obsidian";
-import { AnkiSyncSettings, DEFAULT_SETTINGS, NoteFrontmatter, NoteTypeFields } from "./settings";
+import { AnkiSyncSettings, AnkiSyncSettingTab, DEFAULT_SETTINGS, NoteTypeFields } from "./settings";
 import { parseFrontmatter, parseContent } from "./parser";
+import { Logger } from "./logger";
 
 interface AnkiCard {
   [field: string]: string;
@@ -23,78 +21,76 @@ interface AnkiNote {
   };
 }
 
-interface AnkiAction {
-  action: string;
-  params: any;
-}
-
 export default class AnkiSyncPlugin extends Plugin {
   settings: AnkiSyncSettings;
   noteTypeFields: NoteTypeFields = {};
+  private logger: Logger;
 
   async onload() {
     await this.loadSettings();
-    console.log("Settings loaded");
+    this.logger = new Logger(this.settings.debug);
+    this.logger.log("Settings loaded");
 
     // Add ribbon icon
     this.addRibbonIcon(
       "upload",
       "Sync Current Note to Anki Flashcards",
       async () => {
-        console.log("Sync button clicked");
+        this.logger.log("Sync button clicked");
         const view = await this.getActiveMarkdownView();
         if (view) {
           await this.syncCurrentNoteToAnki();
         }
       }
     );
-    console.log("Ribbon icon added");
+    this.logger.log("Ribbon icon added");
 
     // Add settings tab
     this.addSettingTab(new AnkiSyncSettingTab(this.app, this));
-    console.log("Setting tab added");
+    this.logger.log("Setting tab added");
 
     // Add command
     this.addCommand({
       id: "sync-to-anki",
       name: "Sync current note to Anki",
       callback: async () => {
+        this.logger.log("Sync command executed");
         const view = await this.getActiveMarkdownView();
         if (view) {
           await this.syncCurrentNoteToAnki();
         }
       },
     });
-    console.log("Command added");
+    this.logger.log("Command added");
 
     // Load note types on startup
     try {
       await this.loadNoteTypes();
-      console.log("Note types loaded");
+      this.logger.log("Note types loaded");
     } catch (error) {
-      console.error("Failed to load note types:", error);
+      this.logger.error("Failed to load note types:", error);
       new Notice("Failed to connect to Anki. Please ensure AnkiConnect is running.");
     }
 
-    console.log("Anki Sync plugin loaded successfully");
+    this.logger.log("Anki Sync plugin loaded successfully");
   }
 
   async loadNoteTypes() {
     try {
-      console.log("Loading note types from Anki...");
+      this.logger.log("Loading note types from Anki...");
       const noteTypes = await this.invokeAnkiConnect("modelNames");
-      console.log("Available note types:", noteTypes);
+      this.logger.log("Available note types:", noteTypes);
 
       for (const noteType of noteTypes) {
         try {
-          console.log(`Loading fields for note type: ${noteType}`);
+          this.logger.log(`Loading fields for note type: ${noteType}`);
           const fields = await this.invokeAnkiConnect("modelFieldNames", {
             modelName: noteType,
           });
-          console.log(`Fields for ${noteType}:`, fields);
+          this.logger.log(`Fields for ${noteType}:`, fields);
           this.noteTypeFields[noteType] = fields;
         } catch (error) {
-          console.error(
+          this.logger.error(
             `Failed to load fields for note type ${noteType}:`,
             error,
           );
@@ -105,12 +101,12 @@ export default class AnkiSyncPlugin extends Plugin {
 
       // Verify fields were loaded
       const loadedTypes = Object.keys(this.noteTypeFields);
-      console.log("Loaded note types:", loadedTypes);
+      this.logger.log("Loaded note types:", loadedTypes);
       for (const type of loadedTypes) {
-        console.log(`Fields for ${type}:`, this.noteTypeFields[type]);
+        this.logger.log(`Fields for ${type}:`, this.noteTypeFields[type]);
       }
     } catch (error) {
-      console.error("Failed to load note types:", error);
+      this.logger.error("Failed to load note types:", error);
       throw error;
     }
   }
@@ -139,7 +135,7 @@ export default class AnkiSyncPlugin extends Plugin {
       }
       return responseJson.result;
     } catch (error) {
-      console.error(`AnkiConnect ${action} failed:`, error);
+      this.logger.error(`AnkiConnect ${action} failed:`, error);
       if (error.message.includes("Failed to fetch")) {
         throw new Error(
           "Cannot connect to Anki. Is Anki running with AnkiConnect installed?",
@@ -151,27 +147,29 @@ export default class AnkiSyncPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    return this.settings;
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
+    if (this.logger) {
+      this.logger.setEnabled(this.settings.debug);
+    }
   }
 
   async getActiveMarkdownView(): Promise<MarkdownView | null> {
     try {
-      console.log("Starting sync process...");
+      this.logger.log("Starting sync process...");
       
       // Try multiple methods to get the active view
       let activeView: MarkdownView | null = null;
       
       // Method 1: Through active leaf (most reliable)
       const activeLeaf = this.app.workspace.activeLeaf;
-      console.log("Active leaf:", activeLeaf);
+      this.logger.log("Active leaf:", activeLeaf);
       
       if (activeLeaf?.view instanceof MarkdownView) {
         activeView = activeLeaf.view;
-        console.log("Method 1 - Found view from active leaf:", activeView.file?.path);
+        this.logger.log("Method 1 - Found view from active leaf:", activeView.file?.path);
       }
       
       // Method 2: Direct active view (backup)
@@ -179,16 +177,16 @@ export default class AnkiSyncPlugin extends Plugin {
         const directView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (directView) {
           activeView = directView;
-          console.log("Method 2 - Found direct active view:", directView.file?.path);
+          this.logger.log("Method 2 - Found direct active view:", directView.file?.path);
         }
       }
       
       // Method 3: Last resort - search all leaves
       if (!activeView) {
-        console.log("Trying method 3 - Search all leaves");
+        this.logger.log("Trying method 3 - Search all leaves");
         const leaves = this.app.workspace.getLeavesOfType("markdown");
         const paths = leaves.map(leaf => (leaf.view as MarkdownView).file?.path).filter(Boolean);
-        console.log("Found markdown leaves:", paths);
+        this.logger.log("Found markdown leaves:", paths);
         
         // First try to find a leaf that is both active and focused
         for (const leaf of leaves) {
@@ -197,7 +195,7 @@ export default class AnkiSyncPlugin extends Plugin {
           // @ts-expect-error FIXME
           if (leaf.view instanceof MarkdownView && (state.active || state.focused)) {
             activeView = leaf.view;
-            console.log("Method 3 - Found active/focused leaf:", activeView.file?.path);
+            this.logger.log("Method 3 - Found active/focused leaf:", activeView.file?.path);
             break;
           }
         }
@@ -207,21 +205,21 @@ export default class AnkiSyncPlugin extends Plugin {
           const firstLeaf = leaves[0];
           if (firstLeaf.view instanceof MarkdownView) {
             activeView = firstLeaf.view;
-            console.log("Method 3 - Using first available leaf:", activeView.file?.path);
+            this.logger.log("Method 3 - Using first available leaf:", activeView.file?.path);
           }
         }
       }
 
       if (!activeView?.file) {
         new Notice("No active markdown file found. Please open a markdown file and try again.");
-        console.log("No active markdown view found after all attempts");
+        this.logger.log("No active markdown view found after all attempts");
         return null;
       }
 
-      console.log("Final selected file for sync:", activeView.file.path);
+      this.logger.log("Final selected file for sync:", activeView.file.path);
       return activeView;
     } catch (error) {
-      console.error("Error in getActiveMarkdownView:", error);
+      this.logger.error("Error in getActiveMarkdownView:", error);
       return null;
     }
   }
@@ -232,11 +230,11 @@ export default class AnkiSyncPlugin extends Plugin {
       if (!activeView) return;
 
       const content = activeView.getViewData();
-      console.log("Read file content, length:", content.length);
+      this.logger.log("Read file content, length:", content.length);
 
       // Parse frontmatter
-      const frontmatter = this.parseFrontmatter(content);
-      console.log("Parsed frontmatter:", frontmatter);
+      const frontmatter = parseFrontmatter(content);
+      this.logger.log("Parsed frontmatter:", frontmatter);
 
       if (!frontmatter) {
         new Notice("No Anki configuration found in frontmatter");
@@ -248,9 +246,9 @@ export default class AnkiSyncPlugin extends Plugin {
       const noteType = frontmatter.ankiNoteType || this.settings.defaultNoteType;
       const fieldMappings = frontmatter.ankiFieldMappings || {};
 
-      console.log("Using note type:", noteType);
-      console.log("Using deck:", deck);
-      console.log("Field mappings:", fieldMappings);
+      this.logger.log("Using note type:", noteType);
+      this.logger.log("Using deck:", deck);
+      this.logger.log("Field mappings:", fieldMappings);
 
       // Ensure we have the fields for this note type
       const availableFields = this.noteTypeFields[noteType];
@@ -259,11 +257,11 @@ export default class AnkiSyncPlugin extends Plugin {
         return;
       }
 
-      console.log("Available fields for note type:", availableFields);
+      this.logger.log("Available fields for note type:", availableFields);
 
       // Parse the content into flashcards
-      const flashcards = this.parseContent(content, fieldMappings, availableFields);
-      console.log("Parsed flashcards:", flashcards);
+      const flashcards = parseContent(content, fieldMappings, availableFields);
+      this.logger.log("Parsed flashcards:", flashcards);
 
       if (flashcards.length === 0) {
         new Notice("No valid flashcards found in note");
@@ -274,7 +272,7 @@ export default class AnkiSyncPlugin extends Plugin {
       await this.sendToAnki(flashcards, deck, noteType);
       new Notice(`Successfully synced ${flashcards.length} cards to Anki`);
     } catch (error) {
-      console.error("Error in syncCurrentNoteToAnki:", error);
+      this.logger.error("Error in syncCurrentNoteToAnki:", error);
       new Notice(`Error syncing to Anki: ${error.message}`);
     }
   }
@@ -286,14 +284,14 @@ export default class AnkiSyncPlugin extends Plugin {
 
       // If deck doesn't exist, create it
       if (!decks.includes(deckName)) {
-        console.log(`Creating new deck: ${deckName}`);
+        this.logger.log(`Creating new deck: ${deckName}`);
         await this.invokeAnkiConnect("createDeck", {
           deck: deckName,
         });
         new Notice(`Created new deck: ${deckName}`);
       }
     } catch (error) {
-      console.error("Failed to check/create deck:", error);
+      this.logger.error("Failed to check/create deck:", error);
       throw new Error(`Failed to ensure deck exists: ${error.message}`);
     }
   }
@@ -306,12 +304,12 @@ export default class AnkiSyncPlugin extends Plugin {
     try {
       // Ensure deck exists before adding cards
       await this.ensureDeckExists(deck);
-      console.log(`Sending ${flashcards.length} cards to Anki...`);
+      this.logger.log(`Sending ${flashcards.length} cards to Anki...`);
 
       // First, find all existing notes in the deck
       const query = `"deck:${deck}"`;
       const existingNoteIds = await this.invokeAnkiConnect("findNotes", { query });
-      console.log(`Found ${existingNoteIds?.length || 0} existing notes in deck`);
+      this.logger.log(`Found ${existingNoteIds?.length || 0} existing notes in deck`);
 
       if (existingNoteIds && existingNoteIds.length > 0) {
         // Get info for all existing notes
@@ -323,7 +321,7 @@ export default class AnkiSyncPlugin extends Plugin {
         const existingNoteMap = new Map(
           existingNotes.map((note: AnkiNote) => [note.fields.Front.value, note.noteId])
         );
-        console.log("Created map of existing notes");
+        this.logger.log("Created map of existing notes");
 
         // Separate cards into new and updates
         const newCards: typeof flashcards = [];
@@ -342,7 +340,7 @@ export default class AnkiSyncPlugin extends Plugin {
           }
         }
 
-        console.log(`Found ${updateCards.length} cards to update and ${newCards.length} new cards`);
+        this.logger.log(`Found ${updateCards.length} cards to update and ${newCards.length} new cards`);
 
         // Bulk update existing notes
         if (updateCards.length > 0) {
@@ -356,7 +354,7 @@ export default class AnkiSyncPlugin extends Plugin {
             }
           }));
 
-          console.log("Updating existing notes...");
+          this.logger.log("Updating existing notes...");
           await this.invokeAnkiConnect("multi", { actions: updateActions });
         }
 
@@ -377,7 +375,7 @@ export default class AnkiSyncPlugin extends Plugin {
             },
           }));
 
-          console.log("Adding new notes...");
+          this.logger.log("Adding new notes...");
           await this.invokeAnkiConnect("multi", { actions: addActions });
         }
       } else {
@@ -397,76 +395,15 @@ export default class AnkiSyncPlugin extends Plugin {
           },
         }));
 
-        console.log("Adding all notes as new...");
+        this.logger.log("Adding all notes as new...");
         await this.invokeAnkiConnect("multi", { actions: addActions });
       }
 
-      console.log("Successfully synced all cards");
+      this.logger.log("Successfully synced all cards");
     } catch (error) {
-      console.error("Failed in sendToAnki:", error);
+      this.logger.error("Failed in sendToAnki:", error);
       throw new Error(`Failed to sync cards: ${error.message}`);
     }
   }
 }
 
-class AnkiSyncSettingTab extends PluginSettingTab {
-  plugin: AnkiSyncPlugin;
-
-  constructor(app: App, plugin: AnkiSyncPlugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-
-  async display() {
-    const { containerEl } = this;
-    containerEl.empty();
-
-    // Get available decks and note types from Anki
-    let decks: string[] = [];
-    let noteTypes: string[] = [];
-    try {
-      decks = await this.plugin.invokeAnkiConnect("deckNames");
-      noteTypes = await this.plugin.invokeAnkiConnect("modelNames");
-    } catch (error) {
-      new Notice("Failed to fetch Anki configuration. Is AnkiConnect running?");
-    }
-
-    new Setting(containerEl)
-      .setName("Default Deck")
-      .setDesc("Choose the default Anki deck for new cards")
-      .addDropdown((dropdown) => {
-        decks.forEach((deck) => dropdown.addOption(deck, deck));
-        dropdown
-          .setValue(this.plugin.settings.defaultDeck)
-          .onChange(async (value) => {
-            this.plugin.settings.defaultDeck = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Default Note Type")
-      .setDesc("Choose the default note type for new cards")
-      .addDropdown((dropdown) => {
-        noteTypes.forEach((type) => dropdown.addOption(type, type));
-        dropdown
-          .setValue(this.plugin.settings.defaultNoteType)
-          .onChange(async (value) => {
-            this.plugin.settings.defaultNoteType = value;
-            await this.plugin.saveSettings();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("AnkiConnect URL")
-      .setDesc("URL where AnkiConnect is running")
-      .addText((text) =>
-        text
-          .setValue(this.plugin.settings.ankiConnectUrl)
-          .onChange(async (value) => {
-            this.plugin.settings.ankiConnectUrl = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-  }
-}
