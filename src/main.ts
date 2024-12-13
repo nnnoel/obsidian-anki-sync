@@ -449,7 +449,7 @@ export default class AnkiSyncPlugin extends Plugin {
 
     // Create a pattern that matches any field start
     const firstField = noteFields[0];
-    const entrySplitPattern = new RegExp(`(?=### .*?${firstField}:)`, 'i');
+    const entrySplitPattern = new RegExp(`(?=(?:### )?${firstField}:)`, 'i');
     const entries = contentWithoutFrontmatter.split(entrySplitPattern).filter(Boolean);
     console.log(`Found ${entries.length} entries to process`);
 
