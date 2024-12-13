@@ -5,9 +5,9 @@ import {
   Setting,
   Notice,
   MarkdownView,
-  parseYaml,
 } from "obsidian";
-import { AnkiSyncSettings, DEFAULT_SETTINGS, NoteFrontmatter, NoteTypeFields } from "settings";
+import { AnkiSyncSettings, DEFAULT_SETTINGS, NoteFrontmatter, NoteTypeFields } from "./settings";
+import { parseFrontmatter, parseContent } from "./parser";
 
 interface AnkiCard {
   [field: string]: string;
@@ -151,22 +151,11 @@ export default class AnkiSyncPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    return this.settings;
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
-  }
-
-  parseFrontmatter(content: string): NoteFrontmatter | null {
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!frontmatterMatch) return null;
-
-    try {
-      return parseYaml(frontmatterMatch[1]);
-    } catch (error) {
-      console.error("Failed to parse frontmatter:", error);
-      return null;
-    }
   }
 
   async getActiveMarkdownView(): Promise<MarkdownView | null> {
@@ -417,153 +406,6 @@ export default class AnkiSyncPlugin extends Plugin {
       console.error("Failed in sendToAnki:", error);
       throw new Error(`Failed to sync cards: ${error.message}`);
     }
-  }
-
-  parseContent(
-    content: string,
-    fieldMappings: { [key: string]: string },
-    availableFields: string[],
-  ): Array<AnkiCard> {
-    console.log("Starting content parsing...");
-    console.log("Field mappings:", fieldMappings);
-    console.log("Available fields:", availableFields);
-
-    const flashcards: Array<AnkiCard> = [];
-    
-    // Validate field mappings
-    const invalidFields = Object.values(fieldMappings).filter(ankiField => !availableFields.includes(ankiField));
-    if (invalidFields.length > 0) {
-      console.error(`Invalid field mappings: ${invalidFields.join(', ')} not found in note type`);
-      return [];
-    }
-
-    // Get all field names that we're looking for
-    const noteFields = Object.keys(fieldMappings);
-    if (noteFields.length === 0) {
-      console.error("No field mappings provided");
-      return [];
-    }
-
-    // Remove frontmatter from content before processing
-    const contentWithoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n/, '');
-
-    // Create a pattern that matches any field start
-    const firstField = noteFields[0];
-    const entrySplitPattern = new RegExp(`(?=(?:### )?${firstField}:)`, 'i');
-    const entries = contentWithoutFrontmatter.split(entrySplitPattern).filter(Boolean);
-    console.log(`Found ${entries.length} entries to process`);
-
-    for (const entry of entries) {
-      console.log("\nProcessing entry:", entry.substring(0, 100) + "...");
-      const fields: AnkiCard = {};
-      
-      // For each field we want to capture
-      for (const [noteField, ankiField] of Object.entries(fieldMappings)) {
-        // Create a pattern that captures everything after "Field:" until the next field or end
-        const nextFields = noteFields
-          .filter(f => f !== noteField)
-          .map(f => `### |${f}:`)
-          .join('|');
-
-        // Match field content by looking for the field name followed by a colon,
-        // then capture everything until the next field marker or end
-        const fieldPattern = new RegExp(
-          `${noteField}:\\s*([^#]*?)(?=(?:### |${nextFields}|$))`,
-          'i'
-        );
-
-        const match = entry.match(fieldPattern);
-        if (match) {
-          const content = match[1] || '';  // Use empty string if no capture group
-          
-          // Split content into lines and process each line
-          const lines = content.split('\n').map(line => {
-            line = line.trim();
-            // Check if it's a numbered list item or bullet point
-            if (/^\d+\./.test(line)) {
-              // Convert numbered list items to HTML ordered list
-              return line
-                .replace(/^\d+\.\s*/, '') // Remove the number
-                .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>') // Bold text
-                .replace(/\*+/g, '') // Remove any remaining asterisks
-                .replace(/_(.*?)_/g, '<i>$1</i>') // Italic
-                .trim();
-            } else if (line.startsWith('-')) {
-              // Convert bullet points to HTML unordered list
-              return line
-                .replace(/^-\s*/, '') // Remove the bullet
-                .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>') // Bold text
-                .replace(/\*+/g, '') // Remove any remaining asterisks
-                .replace(/_(.*?)_/g, '<i>$1</i>') // Italic
-                .trim();
-            } else {
-              // Convert inline markdown to HTML
-              return line
-                .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>') // Bold text
-                .replace(/\*+/g, '') // Remove any remaining asterisks
-                .replace(/_(.*?)_/g, '<i>$1</i>') // Italic
-                .replace(/\s+/g, ' ')
-                .trim();
-            }
-          });
-
-          // Join lines and wrap lists in proper HTML tags
-          let htmlContent = '';
-          let inOrderedList = false;
-          let inUnorderedList = false;
-
-          lines.filter(line => line.length > 0).forEach((line, index) => {
-            if (/^\d+\./.test(content.split('\n')[index].trim())) {
-              if (!inOrderedList) {
-                htmlContent += '<ol>\n';
-                inOrderedList = true;
-              }
-              htmlContent += `  <li>${line}</li>\n`;
-            } else if (content.split('\n')[index].trim().startsWith('-')) {
-              if (!inUnorderedList) {
-                htmlContent += '<ul>\n';
-                inUnorderedList = true;
-              }
-              htmlContent += `  <li>${line}</li>\n`;
-            } else {
-              if (inOrderedList) {
-                htmlContent += '</ol>\n';
-                inOrderedList = false;
-              }
-              if (inUnorderedList) {
-                htmlContent += '</ul>\n';
-                inUnorderedList = false;
-              }
-              htmlContent += line + '\n';
-            }
-          });
-
-          // Close any open lists
-          if (inOrderedList) htmlContent += '</ol>\n';
-          if (inUnorderedList) htmlContent += '</ul>\n';
-
-          fields[ankiField] = htmlContent.trim();
-          console.log(`Found ${ankiField}:`, fields[ankiField].substring(0, 50) + "...");
-        } else {
-          console.log(`No ${ankiField} field found in entry`);
-        }
-      }
-
-      // Check for required fields
-      const hasRequiredFields = ['Front', 'Back'].every(field => 
-        fields[field] && fields[field].length > 0
-      );
-
-      if (hasRequiredFields) {
-        console.log("Adding card with fields:", fields);
-        flashcards.push(fields);
-      } else {
-        console.log("Skipping entry - missing required fields");
-      }
-    }
-
-    console.log(`Created ${flashcards.length} flashcards`);
-    return flashcards;
   }
 }
 
