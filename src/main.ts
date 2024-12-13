@@ -6,6 +6,7 @@ import {
 import { AnkiSyncSettings, AnkiSyncSettingTab, DEFAULT_SETTINGS, NoteTypeFields } from "./settings";
 import { parseFrontmatter, parseContent } from "./parser";
 import { Logger } from "./logger";
+import { FieldDecorator } from "./field-decorator";
 
 interface AnkiCard {
   [field: string]: string;
@@ -25,11 +26,43 @@ export default class AnkiSyncPlugin extends Plugin {
   settings: AnkiSyncSettings;
   noteTypeFields: NoteTypeFields = {};
   private logger: Logger;
+  private fieldDecorator: FieldDecorator;
 
   async onload() {
     await this.loadSettings();
     this.logger = new Logger(this.settings.debug);
+    this.fieldDecorator = new FieldDecorator();
     this.logger.log("Settings loaded");
+
+    // Register editor extension for live preview
+    this.registerEditorExtension([
+      this.fieldDecorator.createEditorExtension()
+    ]);
+
+    // Register markdown processor for reading view
+    this.registerMarkdownPostProcessor((el, ctx) => {
+      const cache = ctx.getSectionInfo(el);
+      if (!cache) return;
+
+      const content = cache.text;
+      const frontmatter = parseFrontmatter(content);
+      if (frontmatter?.ankiFieldMappings) {
+        this.fieldDecorator.processContent(el, frontmatter.ankiFieldMappings);
+      }
+    });
+
+    // Register event for file open to refresh highlighting
+    this.registerEvent(
+      this.app.workspace.on('file-open', async (file) => {
+        if (!file) return;
+        
+        // Force a refresh of the view to trigger the markdown processor
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (view) {
+          await view.previewMode.rerender(true);
+        }
+      })
+    );
 
     // Add ribbon icon
     this.addRibbonIcon(
@@ -406,4 +439,3 @@ export default class AnkiSyncPlugin extends Plugin {
     }
   }
 }
-

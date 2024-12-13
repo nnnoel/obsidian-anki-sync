@@ -1,0 +1,15 @@
+.anki-field-marker {
+    border-radius: 4px;
+    padding: 0 2px;
+    margin: 0 -2px;
+}
+
+/* Ensure highlights work in source mode */
+.markdown-source-view .cm-line .anki-field-marker {
+    background-color: inherit;
+}
+
+/* Ensure highlights work in preview mode */
+.markdown-preview-view .anki-field-marker {
+    background-color: inherit;
+}
