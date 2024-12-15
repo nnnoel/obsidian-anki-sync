@@ -1,6 +1,6 @@
 {
   "name": "obsidian-anki-sync",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Sync Obsidian notes to Anki flashcards",
   "main": "main.js",
   "type": "module",

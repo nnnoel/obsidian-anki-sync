@@ -1,7 +1,7 @@
 {
   "id": "obsidian-anki-sync",
   "name": "Anki Sync",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "minAppVersion": "1.0.0",
   "description": "Sync Obsidian notes to Anki flashcards",
   "author": "Noel C",
