@@ -1,6 +1,6 @@
 # Obsidian Anki Sync Plugin
 
-A plugin for [Obsidian](https://obsidian.md) that syncs your notes to [Anki](https://apps.ankiweb.net/) flashcards with smart duplicate handling and bulk operations.
+A work-in-progress plugin for [Obsidian](https://obsidian.md) that syncs your notes to [Anki](https://apps.ankiweb.net/) flashcards with smart duplicate handling and bulk operations. **This plugin is not yet published to the official Obsidian Community Plugins list.** You can still use it by manually installing it from this repository.
 
 ## Features
 
@@ -10,23 +10,31 @@ A plugin for [Obsidian](https://obsidian.md) that syncs your notes to [Anki](htt
 - 🗂 Custom deck and note type support
 - 🔧 Configurable field mappings
 - 📝 Support for multiple note formats
+- ✨ In-editor highlighting of fields
 
 ## Installation
 
-1. Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) in Anki
-2. Configure AnkiConnect to accept requests from Obsidian:
-   - In Anki, go to Tools > Add-ons > AnkiConnect > Config
-   - Replace the existing configuration with:
-   ```json
-   {
-       "webCorsOriginList": [
-           "app://obsidian.md"
-       ]
-   }
-   ```
-   - Click "Save" and restart Anki
-3. Install this plugin in Obsidian via Community Plugins
-4. Configure your default deck and note type in plugin settings
+1. **Set up AnkiConnect**:
+   - Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) in Anki
+   - Configure AnkiConnect to accept requests from Obsidian:
+     - In Anki, go to Tools > Add-ons > AnkiConnect > Config
+     - Replace the existing configuration with:
+       ```json
+       {
+           "webCorsOriginList": [
+               "app://obsidian.md"
+           ]
+       }
+       ```
+     - Click "Save" and restart Anki
+2. **Install the Plugin Manually**:
+   - Download or clone this repository to your local machine.
+   - Build or copy the plugin files into your `<vault>/.obsidian/plugins/obsidian-anki-sync` folder.
+
+3. **Enable the Plugin**:
+   - Open Obsidian’s Settings > Community Plugins
+   - Enable "Third-party plugins" if prompted.
+   - Find the "Obsidian Anki Sync" plugin in the list (or refresh if needed) and enable it.
 
 > **Important**: If you skip the CORS configuration step, the plugin won't be able to communicate with Anki and you'll see connection errors.
 
@@ -34,26 +42,27 @@ A plugin for [Obsidian](https://obsidian.md) that syncs your notes to [Anki](htt
 
 ### Prerequisites
 
-1. **Anki Note Type**: Create your desired note type in Anki *before* using this plugin
-   - The plugin does not create note types automatically
-   - If the specified note type doesn't exist, sync will fail with an error
+1. **Anki Note Type**: Create and configure your desired note type in Anki first.
+   - The plugin does not create note types.
+   - If the specified note type doesn't exist, sync will fail.
 
 ### Field Mappings
 
-Field mappings connect your note content to Anki fields. The left side (keys) are what you'll use in your notes, and the right side (values) must match your Anki note type fields exactly:
+Field mappings link your note’s structured sections to Anki’s fields. For example:
 
 ```json
 {
-  "Word": "Front",        // Your note's "Word" section → Anki's "Front" field
-  "Meaning": "Back",      // Your note's "Meaning" section → Anki's "Back" field
-  "Context": "Context"    // Your note's "Context" section → Anki's "Context" field
+  "Word": "Front",
+  "Meaning": "Back",
+  "Context": "Context"
 }
 ```
 
 **Requirements:**
-- Values must exactly match existing Anki note type fields (case-sensitive)
-- At minimum, map the required fields for your note type (usually Front/Back)
-- Unmapped fields in your notes will be ignored
+
+- Values must match Anki fields exactly (case-sensitive).
+- Map at least the required fields (e.g., Front/Back).
+- Unmapped fields in your notes are ignored.
 
 ### Example Note
 
@@ -74,8 +83,8 @@ ankiFieldMappings:
 
 ### Syncing
 
-- Click the sync icon in the ribbon
-- Use the command palette and search for "Sync current note to Anki"
+- Use the command palette and search for "Sync current Note to Anki Flashcards"
+- Click the sync icon in the ribbon (if available)
 - Use the hotkey (configurable in Settings)
 
 ## Configuration
@@ -84,11 +93,11 @@ ankiFieldMappings:
 
 - Default Deck: The default Anki deck to sync to
 - Default Note Type: The default note type to use
-- AnkiConnect URL: The URL where AnkiConnect is running (default: http://localhost:8765)
+- AnkiConnect URL: The URL where AnkiConnect is running (default: <http://localhost:8765>)
 
 ### Note-specific Settings
 
-Override default settings using frontmatter in individual notes:
+Set per-note overrides in frontmatter:
 
 ```yaml
 ankiDeck: "Custom Deck"
@@ -114,4 +123,3 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 - [Obsidian](https://obsidian.md) for the amazing platform
 - [AnkiConnect](https://ankiweb.net/shared/info/2055492159) for making this integration possible
-- All contributors who have helped improve this plugin
