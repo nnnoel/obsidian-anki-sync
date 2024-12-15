@@ -197,23 +197,27 @@ export const parseContent = (
   fieldMappings: { [key: string]: string },
   availableFields: string[],
 ): Record<string, string>[] => {
-
   // Validate field mappings
-  const invalidFields = Object.values(fieldMappings).filter(ankiField => !availableFields.includes(ankiField));
+  const invalidFields = Object.values(fieldMappings).filter(
+    (ankiField) => !availableFields.includes(ankiField),
+  );
   if (invalidFields.length > 0) {
-    console.error(`Invalid field mappings: ${invalidFields.join(', ')} not found in note type`);
-    return [];
+    throw new Error(
+      `Invalid field mappings: ${invalidFields.join(", ")} not found in note type`,
+    );
   }
 
   // Get all field names that we're looking for
   const noteFields = Object.keys(fieldMappings);
   if (noteFields.length === 0) {
     console.error("No field mappings provided");
-    return [];
+    throw new Error("No field mappings provided");
   }
 
-
-  const contentWithoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n/, '');
+  const contentWithoutFrontmatter = content.replace(
+    /^---\n[\s\S]*?\n---\n/,
+    "",
+  );
 
   const fieldMap = extractFieldsFromText(noteFields, contentWithoutFrontmatter);
 
@@ -221,3 +225,4 @@ export const parseContent = (
 
   return result;
 };
+

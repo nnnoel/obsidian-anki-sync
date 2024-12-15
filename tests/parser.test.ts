@@ -110,17 +110,17 @@ describe("parseContent", () => {
       Front: "InvalidField",
       Back: "Back",
     };
-    const flashcards = parseContent(
-      vietnameseNote,
-      invalidFieldMappings,
-      availableFields,
-    );
-    expect(flashcards).toHaveLength(0);
+  
+    expect(() => {
+      parseContent(vietnameseNote, invalidFieldMappings, availableFields);
+    }).toThrow("Invalid field mappings");
   });
+  
 
   it("should handle empty field mappings", () => {
-    const flashcards = parseContent(vietnameseNote, {}, availableFields);
-    expect(flashcards).toHaveLength(0);
+    expect(() => {
+      parseContent(vietnameseNote, {}, availableFields);
+    }).toThrow("No field mappings provided");
   });
 
   it("should parse content with missing optional fields", () => {

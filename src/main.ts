@@ -7,7 +7,7 @@ import {
 import { parseFrontmatter, parseContent } from "./parser";
 import { Logger } from "./logger";
 import { FieldDecorator } from "./field-decorator";
-import { AnkiService } from "./anki-service";
+import { AnkiCard, AnkiService } from "./anki-service";
 import { FieldDecorationManager } from "./field-decoration-manager";
 
 export default class AnkiSyncPlugin extends Plugin {
@@ -213,8 +213,14 @@ export default class AnkiSyncPlugin extends Plugin {
       this.logger.log("Available fields for note type:", availableFields);
 
       // Parse the content into flashcards
-      const flashcards = parseContent(content, fieldMappings, availableFields);
-      this.logger.log("Parsed flashcards:", flashcards);
+      let flashcards: AnkiCard[] = [];
+      try {
+        flashcards = parseContent(content, fieldMappings, availableFields);
+        this.logger.log("Parsed flashcards:", flashcards);
+      } catch (error) {
+        new Notice(error.message);
+        return;
+      }
 
       if (flashcards.length === 0) {
         new Notice("No valid flashcards found in note");
