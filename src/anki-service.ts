@@ -129,7 +129,7 @@ export class AnkiService {
   }
 
   async ping() {
-    return this.invokeAnkiConnect("ping");
+    return this.invokeAnkiConnect("version");
   }
 
   async multiAction(actions: { action: string; params: any }[]) {
