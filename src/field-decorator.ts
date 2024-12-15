@@ -1,5 +1,4 @@
-import { Extension } from "obsidian";
-import { RangeSetBuilder } from "@codemirror/state";
+import { Extension, RangeSetBuilder } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { parseFrontmatter } from "./parser";
 
@@ -70,16 +69,19 @@ export class FieldDecorator {
                     
                     Object.entries(frontmatter.ankiFieldMappings).forEach(([ankiField, obsidianField]) => {
                         const color = plugin.getColorForField(ankiField);
-                        const pattern = `${obsidianField}:`;
-                        let pos = text.indexOf(pattern);
+                        // Capture the entire field including formatting
+                        const pattern = new RegExp(`([*_~]{0,2}${obsidianField}[*_~]{0,2}):`, 'g');
+                        let match;
                         
-                        while (pos !== -1) {
+                        while ((match = pattern.exec(text)) !== null) {
+                            const startPos = from + match.index;
+                            const fieldLength = match[1].length;
+                            
                             matches.push({
-                                pos: from + pos,
-                                length: pattern.length,
+                                pos: startPos,
+                                length: fieldLength,
                                 color
                             });
-                            pos = text.indexOf(pattern, pos + 1);
                         }
                     });
                 }
@@ -91,7 +93,13 @@ export class FieldDecorator {
                 matches.forEach(({ pos, length, color }) => {
                     const mark = Decoration.mark({
                         class: "anki-field-marker",
-                        attributes: { style: `background-color: ${color} !important;` }
+                        attributes: { 
+                            style: `background-color: ${color} !important; 
+                                   border-right: none !important;
+                                   border-left: none !important;
+                                   user-select: text !important;
+                                   cursor: text !important;`
+                        }
                     });
                     builder.add(pos, pos + length, mark);
                 });
@@ -99,8 +107,7 @@ export class FieldDecorator {
                 return builder.finish();
             }
         }, {
-            decorations: v => v.decorations,
-            provide: () => EditorView.atomicRanges.of(view => view.decorations)
+            decorations: v => v.decorations
         });
     }
 
@@ -110,7 +117,6 @@ export class FieldDecorator {
             el,
             NodeFilter.SHOW_TEXT,
             null,
-            false
         );
 
         const textNodes: Text[] = [];
