@@ -7,6 +7,13 @@ export interface FieldHighlight {
     color: string;
 }
 
+// The FieldDecorator class is responsible for identifying and highlighting 
+// specific "fields" within a text document, as determined by frontmatter 
+// metadata (e.g., "ankiFieldMappings"). By parsing frontmatter and analyzing 
+// the document's text, it locates occurrences of these fields, then visually 
+// highlights them in the editor (through a CodeMirror extension) or in plain 
+// HTML content (for non-editor scenarios). This helps users quickly see and 
+// identify fields of interest within their notes or documents.
 export class FieldDecorator {
     private colors: Map<string, string> = new Map();
     private colorGenerator: () => string;

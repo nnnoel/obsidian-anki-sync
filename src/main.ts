@@ -8,50 +8,26 @@ import { parseFrontmatter, parseContent } from "./parser";
 import { Logger } from "./logger";
 import { FieldDecorator } from "./field-decorator";
 import { AnkiService } from "./anki-service";
+import { FieldDecorationManager } from "./field-decoration-manager";
 
 export default class AnkiSyncPlugin extends Plugin {
   settings: AnkiSyncSettings;
   private logger: Logger;
   private fieldDecorator: FieldDecorator;
+  private decorationManager: FieldDecorationManager;
   private ankiService: AnkiService;
 
   async onload() {
     await this.loadSettings();
     this.logger = new Logger(this.settings.debug);
     this.fieldDecorator = new FieldDecorator();
+    this.decorationManager = new FieldDecorationManager(this.app, this.fieldDecorator);
+    this.decorationManager.registerDecorations(this);
     this.ankiService = new AnkiService(
       this.settings.ankiConnectUrl,
       this.logger,
     );
     this.logger.log("Settings loaded");
-
-    // Register editor extension for live preview
-    this.registerEditorExtension([this.fieldDecorator.createEditorExtension()]);
-
-    // Register markdown processor for reading view
-    this.registerMarkdownPostProcessor((el, ctx) => {
-      const cache = ctx.getSectionInfo(el);
-      if (!cache) return;
-
-      const content = cache.text;
-      const frontmatter = parseFrontmatter(content);
-      if (frontmatter?.ankiFieldMappings) {
-        this.fieldDecorator.processContent(el, frontmatter.ankiFieldMappings);
-      }
-    });
-
-    // Register event for file open to refresh highlighting
-    this.registerEvent(
-      this.app.workspace.on("file-open", async (file) => {
-        if (!file) return;
-
-        // Force a refresh of the view to trigger the markdown processor
-        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (view) {
-          view.previewMode.rerender(true);
-        }
-      }),
-    );
 
     // Add ribbon icon
     this.addRibbonIcon(
